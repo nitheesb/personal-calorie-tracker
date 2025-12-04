@@ -12,11 +12,15 @@
     <meta name="apple-mobile-web-app-title" content="Ntrition.AI" />
     <meta name="theme-color" content="#10b981" />
 
-    <!-- Icons (You can replace hrefs with actual .png paths later) -->
+    <!-- Icons -->
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2921/2921822.png">
 
+    <!-- Tailwind (Script version kept for simplicity in this setup, ideally moved to PostCSS in prod) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- External Scanner Lib -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
@@ -53,16 +57,18 @@
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1"
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
