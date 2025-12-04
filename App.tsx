@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { IconHome, IconPlus, IconChartBar, IconScan } from './components/Icons';
 import MacroRing from './components/MacroRing';
 import FoodEntry from './components/FoodEntry';
@@ -24,15 +24,51 @@ const INITIAL_BODY_LOGS: BodyMetrics[] = [
   { id: '3', date: '2023-10-25', weight: 70.2, bodyFatPercent: 20.8, muscleMass: 52.5 }
 ];
 
+const STORAGE_KEY_FOOD = 'ntrition_daily_log';
+const STORAGE_KEY_BODY = 'ntrition_body_logs';
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
   const [goals] = useState<UserGoals>(USER_GOALS);
-  const [todayLog, setTodayLog] = useState<DailyLog>({
-    date: new Date().toISOString().split('T')[0],
-    items: []
+  
+  // Initialize Daily Log from LocalStorage
+  const [todayLog, setTodayLog] = useState<DailyLog>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FOOD);
+      const today = new Date().toISOString().split('T')[0];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only return saved log if it matches today's date
+        if (parsed.date === today) {
+          return parsed;
+        }
+      }
+      return { date: today, items: [] };
+    } catch (e) {
+      console.error("Failed to load daily log", e);
+      return { date: new Date().toISOString().split('T')[0], items: [] };
+    }
   });
   
-  const [bodyLogs, setBodyLogs] = useState<BodyMetrics[]>(INITIAL_BODY_LOGS);
+  // Initialize Body Logs from LocalStorage
+  const [bodyLogs, setBodyLogs] = useState<BodyMetrics[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_BODY);
+      return saved ? JSON.parse(saved) : INITIAL_BODY_LOGS;
+    } catch (e) {
+      console.error("Failed to load body logs", e);
+      return INITIAL_BODY_LOGS;
+    }
+  });
+
+  // Save changes to LocalStorage whenever state updates
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_FOOD, JSON.stringify(todayLog));
+  }, [todayLog]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_BODY, JSON.stringify(bodyLogs));
+  }, [bodyLogs]);
 
   const totals = useMemo(() => {
     return todayLog.items.reduce(
@@ -200,7 +236,7 @@ const App: React.FC = () => {
         {renderContent()}
       </div>
 
-      {/* Navigation Bar - Hidden on Add Food if desired, or can be shown. Here we keep it mostly but Add Food has its own back button usually. */}
+      {/* Navigation Bar */}
       {view !== AppView.ADD_FOOD && (
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 pointer-events-none z-50">
           <div className="flex justify-between items-center bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-2 border border-slate-100 pointer-events-auto">
