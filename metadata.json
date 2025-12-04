@@ -1,0 +1,7 @@
+{
+  "name": "Ntrition.AI - Smart Calorie Tracker",
+  "description": "An intelligent nutrition tracker specialized in South Indian cuisine with AI-powered food recognition and label scanning.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
