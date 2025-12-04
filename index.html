@@ -2,8 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Ntrition.AI</title>
+    
+    <!-- PWA / Mobile App Capabilities -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ntrition.AI" />
+    <meta name="theme-color" content="#10b981" />
+
+    <!-- Icons (You can replace hrefs with actual .png paths later) -->
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2921/2921822.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +22,8 @@
       body {
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc;
+        /* Prevent bounce scroll on mobile */
+        overscroll-behavior-y: none;
       }
       /* Hide scrollbar for clean UI */
       .no-scrollbar::-webkit-scrollbar {
@@ -32,8 +45,7 @@
         width: 100% !important;
         height: 100% !important;
       }
-      /* Hide the default scan region box provided by the library if it causes issues, 
-         or style it to not block clicks */
+      /* Hide the default scan region box provided by the library */
       #reader__scan_region {
         pointer-events: none; 
       }
