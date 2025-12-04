@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IconChevronLeft, IconScan, IconPlus } from './Icons';
-import { searchFoodDatabase, fetchProductByBarcode, NutritionResponse } from '../services/nutritionService';
+import { searchLocalDatabase, searchOpenFoodFacts, fetchProductByBarcode, NutritionResponse } from '../services/nutritionService';
 import { FoodItem } from '../types';
 
 // Declare Html5QrcodeScanner type since it's loaded from CDN
@@ -18,6 +18,10 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
   const [error, setError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<NutritionResponse[]>([]);
   
+  // Portion Selection State
+  const [selectedFood, setSelectedFood] = useState<NutritionResponse | null>(null);
+  const [quantity, setQuantity] = useState<string>('1');
+
   // Custom Food Form State
   const [customFood, setCustomFood] = useState({
     name: '',
@@ -34,7 +38,21 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
   const isScannerRunning = useRef<boolean>(false);
 
   // Diverse Suggestions including new user preferences
-  const quickAdds = ["Wheat Bread", "Sambar", "Corn Flakes", "Quinoa Bread", "Vatha Kuzhambu", "Pad Thai", "Egg", "Salad", "Ranch"];
+  const quickAdds = ["Wheat Bread", "Papaya", "Sambar", "Corn Flakes", "Quinoa Bread", "Vatha Kuzhambu", "Pad Thai", "Egg", "Salad", "Ranch"];
+
+  // TN/Pondy/Chennai Healthy Lunch Suggestions
+  const tamilLunchSuggestions = [
+    { name: "Millet Rice", detail: "Healthy Grains" },
+    { name: "Keerai Masiyal", detail: "Spinach" },
+    { name: "Beans Usili", detail: "High Protein" },
+    { name: "Fish Curry", detail: "Pondy Style" },
+    { name: "Chicken Chettinad", detail: "Spicy Protein" },
+    { name: "Cabbage Poriyal", detail: "Light Side" },
+    { name: "Curd Rice", detail: "Cooling" },
+    { name: "Drumstick Sambar", detail: "Classic" },
+    { name: "Veg Kurma", detail: "Mixed Veg" },
+    { name: "Beetroot Poriyal", detail: "Iron Rich" }
+  ];
 
   // Cleanup scanner on unmount
   useEffect(() => {
@@ -125,6 +143,9 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
       if (product) {
         setSearchResults([product]);
         setError(null);
+        // Automatically open portion selector for scanned item
+        setSelectedFood(product);
+        setQuantity('1');
       } else {
         setError(`Product not found for barcode: ${decodedText}. Try searching by name.`);
         setSearchResults([]);
@@ -142,27 +163,50 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
     setError(null);
     setSearchResults([]);
     
+    // 1. Instant Local Search
+    const localResults = searchLocalDatabase(text);
+    setSearchResults(localResults);
+
+    // 2. Background API Search
     try {
-      const results = await searchFoodDatabase(text);
-      setSearchResults(results);
+      const apiResults = await searchOpenFoodFacts(text);
+      setSearchResults(prev => {
+        // Simple deduplication by name (basic)
+        const existingNames = new Set(prev.map(p => p.name.toLowerCase()));
+        const newItems = apiResults.filter(p => !existingNames.has(p.name.toLowerCase()));
+        return [...prev, ...newItems];
+      });
     } catch (err) {
-      setError("Failed to search food.");
+      // API failed, but we might have local.
+      if (localResults.length === 0) setError("Failed to search food.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAdd = (item: NutritionResponse) => {
+  // Open the portion modal instead of adding immediately
+  const handleItemClick = (item: NutritionResponse) => {
+    setSelectedFood(item);
+    setQuantity('1');
+  };
+
+  const handleConfirmAdd = () => {
+    if (!selectedFood) return;
+    
+    const qty = parseFloat(quantity) || 1;
+    
     onAddFood({
-      name: item.name,
-      calories: item.calories,
-      protein: item.protein,
-      carbs: item.carbs,
-      fat: item.fat,
-      fiber: item.fiber,
-      servingSize: item.servingSize,
+      name: selectedFood.name,
+      calories: Math.round(selectedFood.calories * qty),
+      protein: Math.round(selectedFood.protein * qty * 10) / 10,
+      carbs: Math.round(selectedFood.carbs * qty * 10) / 10,
+      fat: Math.round(selectedFood.fat * qty * 10) / 10,
+      fiber: Math.round(selectedFood.fiber * qty * 10) / 10,
+      servingSize: `${qty} x ${selectedFood.servingSize}`,
       type: 'snack' 
     });
+    setSelectedFood(null);
+    setQuantity('1');
     // App.tsx handles navigation back to Dashboard
   };
 
@@ -340,6 +384,68 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
   // --- Main View (Search) ---
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden relative z-40">
+      {/* Portion Selection Modal */}
+      {selectedFood && (
+        <div className="absolute inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10">
+            <div className="flex justify-between items-start mb-4">
+               <div>
+                 <h2 className="text-xl font-bold text-slate-800 capitalize">{selectedFood.name}</h2>
+                 <p className="text-sm text-slate-500">Base: {selectedFood.servingSize}</p>
+               </div>
+               <div className="bg-emerald-50 text-emerald-700 font-bold px-3 py-1 rounded-lg">
+                 {Math.round(selectedFood.calories * (parseFloat(quantity) || 0))} kcal
+               </div>
+            </div>
+            
+            <div className="mb-6">
+               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Number of Servings</label>
+               <div className="flex items-center gap-3">
+                  <button onClick={() => setQuantity(Math.max(0.5, parseFloat(quantity)-0.5).toString())} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 text-xl font-bold">-</button>
+                  <input 
+                    type="number" 
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="flex-1 text-center text-2xl font-bold text-slate-800 border-b-2 border-slate-200 focus:border-emerald-500 focus:outline-none py-1"
+                    step="0.1"
+                  />
+                  <button onClick={() => setQuantity((parseFloat(quantity)+0.5).toString())} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 text-xl font-bold">+</button>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center mb-6">
+               <div className="bg-slate-50 p-2 rounded-lg">
+                 <div className="text-[10px] text-slate-400 uppercase">Protein</div>
+                 <div className="font-bold text-slate-700">{(selectedFood.protein * (parseFloat(quantity) || 0)).toFixed(1)}g</div>
+               </div>
+               <div className="bg-slate-50 p-2 rounded-lg">
+                 <div className="text-[10px] text-slate-400 uppercase">Carbs</div>
+                 <div className="font-bold text-slate-700">{(selectedFood.carbs * (parseFloat(quantity) || 0)).toFixed(1)}g</div>
+               </div>
+               <div className="bg-slate-50 p-2 rounded-lg">
+                 <div className="text-[10px] text-slate-400 uppercase">Fat</div>
+                 <div className="font-bold text-slate-700">{(selectedFood.fat * (parseFloat(quantity) || 0)).toFixed(1)}g</div>
+               </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setSelectedFood(null)}
+                className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmAdd}
+                className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200"
+              >
+                Add Food
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-4 flex items-center gap-3 border-b border-slate-100 bg-white z-10 shadow-sm shrink-0">
         <button onClick={onBack} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
@@ -353,13 +459,12 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
         <div className="relative z-20">
           <input
             type="text"
-            placeholder="Search 'Vatha Kuzhambu'..."
+            placeholder="Search 'Papaya', 'Dosa'..."
             className="w-full pl-4 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-slate-800 shadow-sm"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleTextSearch()}
           />
-          {/* IconSearch removed as requested */}
           <button 
             onClick={() => handleTextSearch()}
             className="absolute right-2 top-1/2 -translate-y-1/2 bg-emerald-500 text-white p-2 rounded-lg text-xs font-semibold hover:bg-emerald-600 shadow-sm active:scale-95 transition-all"
@@ -379,20 +484,13 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
           <span className="font-semibold tracking-wide">Scan Barcode</span>
         </button>
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin"></div>
-            <span className="text-xs text-slate-400 mt-2">Searching...</span>
-          </div>
-        )}
-
         {error && (
           <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100 text-center animate-in fade-in">
             {error}
           </div>
         )}
 
-        {/* Create Custom Food Button - Always Visible to promote usage */}
+        {/* Create Custom Food Button */}
         <button 
           onClick={() => setMode('create')}
           className="w-full py-3 bg-white border border-dashed border-emerald-500 text-emerald-600 font-semibold rounded-xl hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2 active:bg-emerald-100 shrink-0"
@@ -401,12 +499,60 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
           Create Custom Food
         </button>
 
+        {/* Suggestions Section (Visible only when searching is not active) */}
+        {searchResults.length === 0 && !loading && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Quick Popular Tags */}
+            <div>
+               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Popular</h3>
+               <div className="flex flex-wrap gap-2">
+                 {quickAdds.map((item) => (
+                   <button
+                     key={item}
+                     onClick={() => { setQuery(item); handleTextSearch(item); }}
+                     className="px-4 py-2 bg-slate-50 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-full text-sm font-medium transition-all border border-slate-200 hover:border-emerald-200 hover:shadow-sm"
+                   >
+                     {item}
+                   </button>
+                 ))}
+               </div>
+            </div>
+
+            {/* Tamil Nadu/Pondy Lunch Suggestions */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                 <span className="text-xl">🥗</span>
+                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Healthy South Indian Lunch</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                 {tamilLunchSuggestions.map((item) => (
+                   <button
+                     key={item.name}
+                     onClick={() => { setQuery(item.name); handleTextSearch(item.name); }}
+                     className="flex flex-col items-start p-3 bg-white border border-slate-100 rounded-xl hover:shadow-md transition-all active:scale-95 text-left"
+                   >
+                     <span className="font-semibold text-slate-800 text-sm">{item.name}</span>
+                     <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded mt-1">{item.detail}</span>
+                   </button>
+                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Results List */}
-        {searchResults.length > 0 && !loading && (
+        {searchResults.length > 0 && (
           <div className="space-y-4 animate-in slide-in-from-bottom-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Results</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+              <span>Results</span>
+              {loading && <span className="text-emerald-500 animate-pulse">Loading more...</span>}
+            </h3>
             {searchResults.map((item, idx) => (
-              <div key={idx} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow">
+              <div 
+                key={idx} 
+                onClick={() => handleItemClick(item)}
+                className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow cursor-pointer active:scale-[0.99]"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-bold text-slate-800 capitalize text-lg">{item.name}</h3>
@@ -439,33 +585,16 @@ const FoodEntry: React.FC<FoodEntryProps> = ({ onBack, onAddFood }) => {
                     <div className="font-bold text-slate-700">{item.fiber}g</div>
                   </div>
                 </div>
-
-                <button 
-                  onClick={() => handleAdd(item)}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm mt-1 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200/50 active:scale-[0.99]"
-                >
-                  <IconPlus className="w-4 h-4" /> Add to Log
-                </button>
               </div>
             ))}
           </div>
         )}
-
-        {/* Quick Add Suggestions (Only show when no results) */}
-        {searchResults.length === 0 && !loading && !error && (
-          <div className="animate-in fade-in duration-500">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Popular</h3>
-            <div className="flex flex-wrap gap-2">
-              {quickAdds.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => { setQuery(item); handleTextSearch(item); }}
-                  className="px-4 py-2 bg-slate-50 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-full text-sm font-medium transition-all border border-slate-200 hover:border-emerald-200 hover:shadow-sm"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+        
+        {/* Loading Spinner for initial search when no results yet */}
+        {loading && searchResults.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin"></div>
+            <span className="text-xs text-slate-400 mt-2">Searching...</span>
           </div>
         )}
       </div>
